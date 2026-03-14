@@ -60,6 +60,9 @@
       max-width: 70px;
       text-align: center;
     }
+    #username {
+      max-width: 160px;
+    }
     .header-status {
       font-size: 11px;
       color: #9ca3af;
@@ -155,7 +158,7 @@
         </div>
         <div class="header-row">
           <label for="chat">Chat</label>
-          <input id="chat" type="number" value="1" min="1" />
+          <input id="chat" type="number" min="1" />
         </div>
       </div>
       <div class="header-status" id="status">Connecting...</div>
@@ -261,13 +264,22 @@
     if (savedName) {
       usernameEl.value = savedName;
     }
+
+    // chat из localStorage
+    const savedChat = localStorage.getItem('lm_chat') || '1';
+    chatEl.value = savedChat;
+
     usernameEl.addEventListener('change', () => {
       const name = currentUsername();
       localStorage.setItem('lm_username', name);
       reconnectWS();
     });
 
-    chatEl.addEventListener('change', reconnectWS);
+    chatEl.addEventListener('change', () => {
+      const chat = chatEl.value || '1';
+      localStorage.setItem('lm_chat', chat);
+      reconnectWS();
+    });
 
     formEl.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -287,7 +299,7 @@
       inputEl.focus();
     });
 
-    // автоподключение
+    // автоподключение при загрузке
     connectWS();
   </script>
 </body>
