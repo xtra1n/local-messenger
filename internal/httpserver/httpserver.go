@@ -1,0 +1,59 @@
+package httpserver
+
+import (
+	"context"
+	"net/http"
+	"time"
+
+	"github.com/xtra1n/local-messenger/internal/config"
+	"github.com/xtra1n/local-messenger/internal/messenger"
+	"github.com/xtra1n/local-messenger/pkg/logger"
+)
+
+type Server struct {
+	cfg       *config.Config
+	log       *logger.Logger
+	messenger messenger.Messenger
+	srv       *http.Server
+}
+
+func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger) *Server {
+	s := &Server{
+		cfg:       cfg,
+		log:       log,
+		messenger: m,
+	}
+
+	mux := http.NewServeMux()
+	fileServer := http.FileServer(http.Dir("web"))
+	mux.Handle("/", fileServer)
+	mux.HandleFunc("/healthz", s.healthHandler)
+	mux.HandleFunc("/message", s.messageHandler)
+	mux.HandleFunc("/metrics", s.metricsHandler)
+	mux.HandleFunc("/debug/stream", s.streamHandler)
+	mux.HandleFunc("/ws", s.wsHandler)
+
+	s.srv = &http.Server{
+		Addr:    ":" + cfg.HTTPPort,
+		Handler: mux,
+	}
+
+	return s
+}
+
+func (s *Server) Start() error {
+	s.log.Info("HTTP server starting on ", s.cfg.HTTPPort)
+	if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.log.Info("HTTP server shutting down...")
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	return s.srv.Shutdown(ctx)
+}

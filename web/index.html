@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Local Messenger</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+      height: 100vh;
+    }
+    .app {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 480px;
+      height: 100%;
+      background: #020617;
+      color: #e5e7eb;
+    }
+    .header {
+      padding: 10px 12px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+    .header-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .header label {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+    .header input {
+      padding: 4px 8px;
+      font-size: 14px;
+      border-radius: 999px;
+      border: 1px solid #1f2933;
+      background: #020617;
+      color: #e5e7eb;
+      flex: 1;
+    }
+    #chat {
+      max-width: 70px;
+      text-align: center;
+    }
+    .header-status {
+      font-size: 11px;
+      color: #9ca3af;
+      text-align: right;
+      min-width: 80px;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      background: #020617;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .msg-wrap {
+      display: flex;
+    }
+    .msg-wrap.me {
+      justify-content: flex-end;
+    }
+    .msg {
+      max-width: 80%;
+      padding: 6px 10px;
+      border-radius: 16px;
+      background: #1e293b;
+      font-size: 14px;
+      word-wrap: break-word;
+    }
+    .msg.me {
+      background: #22c55e;
+      color: #022c22;
+    }
+    .msg-text {
+      margin-bottom: 2px;
+    }
+    .msg-meta {
+      font-size: 11px;
+      opacity: 0.8;
+    }
+
+    .footer {
+      border-top: 1px solid #1e293b;
+      padding: 6px;
+      display: flex;
+      gap: 6px;
+      background: #020617;
+    }
+    .footer input[type="text"] {
+      flex: 1;
+      padding: 10px 14px;
+      font-size: 15px;
+      border-radius: 999px;
+      border: 1px solid #1f2933;
+      background: #020617;
+      color: #e5e7eb;
+    }
+    .footer button {
+      padding: 10px 14px;
+      font-size: 15px;
+      border-radius: 999px;
+      border: none;
+      background: #22c55e;
+      color: #022c22;
+      font-weight: 600;
+      cursor: pointer;
+      min-width: 70px;
+    }
+    .footer button:disabled {
+      background: #4b5563;
+      color: #9ca3af;
+      cursor: default;
+    }
+
+    @media (max-width: 480px) {
+      .header {
+        padding: 8px;
+      }
+      .footer {
+        padding: 6px 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div class="header-left">
+        <div class="header-row">
+          <label for="username">You</label>
+          <input id="username" type="text" placeholder="your name" />
+        </div>
+        <div class="header-row">
+          <label for="chat">Chat</label>
+          <input id="chat" type="number" value="1" min="1" />
+        </div>
+      </div>
+      <div class="header-status" id="status">Connecting...</div>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <form class="footer" id="form">
+      <input id="input" type="text" placeholder="Type a message..." autocomplete="off" />
+      <button type="submit" id="sendBtn">Send</button>
+    </form>
+  </div>
+
+  <script>
+    const messagesEl = document.getElementById('messages');
+    const formEl = document.getElementById('form');
+    const inputEl = document.getElementById('input');
+    const chatEl = document.getElementById('chat');
+    const usernameEl = document.getElementById('username');
+    const statusEl = document.getElementById('status');
+    const sendBtn = document.getElementById('sendBtn');
+
+    let ws = null;
+
+    function setStatus(text, color) {
+      statusEl.textContent = text;
+      statusEl.style.color = color || '#9ca3af';
+    }
+
+    function currentUsername() {
+      return (usernameEl.value || '').trim() || 'anon';
+    }
+
+    function addMessage(msg, isMe) {
+      const wrap = document.createElement('div');
+      wrap.className = 'msg-wrap' + (isMe ? ' me' : '');
+
+      const bubble = document.createElement('div');
+      bubble.className = 'msg' + (isMe ? ' me' : '');
+
+      const textEl = document.createElement('div');
+      textEl.className = 'msg-text';
+      textEl.textContent = msg.text;
+
+      const metaEl = document.createElement('div');
+      metaEl.className = 'msg-meta';
+      metaEl.textContent = msg.by + ' • ' + new Date(msg.at).toLocaleTimeString();
+
+      bubble.appendChild(textEl);
+      bubble.appendChild(metaEl);
+      wrap.appendChild(bubble);
+      messagesEl.appendChild(wrap);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function connectWS() {
+      const chat = chatEl.value || '1';
+      const username = currentUsername();
+
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const url = proto + '://' + location.host +
+        '/ws?chat=' + encodeURIComponent(chat) +
+        '&user=' + encodeURIComponent(username);
+
+      setStatus('Connecting...', '#9ca3af');
+      sendBtn.disabled = true;
+
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        setStatus('Chat ' + chat + ' · ' + username, '#22c55e');
+        sendBtn.disabled = false;
+        inputEl.focus();
+      };
+      ws.onclose = () => {
+        setStatus('Disconnected', '#f97316');
+        sendBtn.disabled = true;
+      };
+      ws.onerror = () => {
+        setStatus('Error', '#f97316');
+      };
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          const me = currentUsername();
+          addMessage(msg, msg.by === me);
+        } catch {}
+      };
+    }
+
+    function reconnectWS() {
+      messagesEl.innerHTML = '';
+      connectWS();
+    }
+
+    // username из localStorage
+    const savedName = localStorage.getItem('lm_username') || '';
+    if (savedName) {
+      usernameEl.value = savedName;
+    }
+    usernameEl.addEventListener('change', () => {
+      const name = currentUsername();
+      localStorage.setItem('lm_username', name);
+      reconnectWS();
+    });
+
+    chatEl.addEventListener('change', reconnectWS);
+
+    formEl.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = inputEl.value.trim();
+      if (!text) return;
+
+      const chat = parseInt(chatEl.value || '1', 10);
+      const by = currentUsername();
+
+      fetch('/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, by, chat })
+      }).catch(() => {});
+
+      inputEl.value = '';
+      inputEl.focus();
+    });
+
+    // автоподключение
+    connectWS();
+  </script>
+</body>
+</html>
