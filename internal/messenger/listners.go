@@ -43,3 +43,20 @@ func (l *listenerMap) GetChatListeners(chatID int) map[int]chan Message {
 	}
 	return listeners
 }
+
+func (l *listenerMap) Remove(chatID int, deviceID int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	devices, ok := l.data[chatID]
+	if !ok {
+		return
+	}
+	if ch, ok := devices[deviceID]; ok {
+		close(ch) // закрываем канал для этого девайса
+		delete(devices, deviceID)
+	}
+	if len(devices) == 0 {
+		delete(l.data, chatID)
+	}
+}

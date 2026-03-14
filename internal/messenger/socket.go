@@ -47,6 +47,11 @@ func (m *messenger) HandleWS(w http.ResponseWriter, r *http.Request) {
 	ch := m.listeners.Get(chatID, deviceID)
 	m.log.Info("websocket connected chat=", chatID, " user=", user)
 
+	defer func() {
+		m.listeners.Remove(chatID, deviceID)
+		m.log.Info("listener removed chat=", chatID, " user=", user)
+	}()
+
 	history := m.getHistory(chatID)
 	for _, msg := range history {
 		if err := conn.WriteJSON(msg); err != nil {
@@ -66,7 +71,10 @@ func (m *messenger) HandleWS(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		select {
-		case msg := <-ch:
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
 			if err := conn.WriteJSON(msg); err != nil {
 				m.log.Error("websocket write error: ", err)
 				return
