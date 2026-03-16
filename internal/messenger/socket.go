@@ -40,7 +40,7 @@ func (m *messenger) HandleWS(w http.ResponseWriter, r *http.Request) {
 	m.metrics.activeConnections.Add(1)
 	defer m.metrics.activeConnections.Add(-1)
 
-	deviceID := fnv32(user)
+	deviceID := int(time.Now().UnixNano())
 	ch := m.subscribe(chatID, deviceID, user)
 	defer m.unsubscribe(chatID, deviceID, user)
 
@@ -100,7 +100,7 @@ func (m *messenger) sendHistory(conn *websocket.Conn, chatID int, user string) e
 func (m *messenger) consumeClienMessages(conn *websocket.Conn, chatID, deviceID int) {
 	for {
 		if _, _, err := conn.ReadMessage(); err != nil {
-			m.log.Info("websocket read error (closing) chat=", chatID, " device=", deviceID, " err=", err)
+			m.log.Info("websocket read closed chat=", chatID, " device=", deviceID, " err=", err)
 			return
 		}
 	}
@@ -114,12 +114,13 @@ func (m *messenger) streamFromChannel(ctx context.Context, conn *websocket.Conn,
 				return
 			}
 			if err := conn.WriteJSON(msg); err != nil {
+				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+					return
+				}
 				m.log.Error("websocket write error: ", err)
 				return
 			}
 		case <-ctx.Done():
-			return
-		case <-time.After((30 * time.Minute)):
 			return
 		}
 	}

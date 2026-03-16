@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"html/template"
 	"net/http"
 	"time"
 
@@ -25,12 +26,42 @@ func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger, us messe
 		log:       log,
 		messenger: m,
 		userStore: us,
-		sessions:   newSessionStore(),
+		sessions:  newSessionStore(),
 	}
 
 	mux := http.NewServeMux()
 	fileServer := http.FileServer(http.Dir("web"))
-	mux.Handle("/", s.authMiddleware(fileServer))
+	mux.Handle("/static/", http.StripPrefix("/static/", fileServer))
+
+	mux.Handle("/", s.authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := r.Cookie("session_token")
+		if err != nil || c.Value == "" {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		sess, ok := s.sessions.Get(c.Value)
+		if !ok {
+			s.sessions.ClearCookie(w)
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		tmpl, err := template.ParseFiles("web/index.html")
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("template error"))
+			return
+		}
+
+		data := struct {
+			Username string
+		}{
+			Username: sess.Username,
+		}
+
+		_ = tmpl.Execute(w, data)
+	})))
 
 	mux.HandleFunc("/login", s.loginPageHandler)
 	mux.HandleFunc("/signup", s.signupPageHandler)
@@ -39,7 +70,7 @@ func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger, us messe
 	mux.HandleFunc("/message", s.messageHandler)
 	mux.HandleFunc("/metrics", s.metricsHandler)
 	mux.HandleFunc("/debug/stream", s.streamHandler)
-	mux.HandleFunc("/ws", s.wsHandler)
+	mux.Handle("/ws", s.authMiddleware(http.HandlerFunc(s.wsHandler)))
 
 	s.srv = &http.Server{
 		Addr:    ":" + cfg.HTTPPort,
@@ -64,27 +95,4 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	defer cancel()
 
 	return s.srv.Shutdown(ctx)
-}
-
-func (s *Server) authMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/login" || r.URL.Path == "/signup" || r.URL.Path == "/healthz" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		c, err := r.Cookie("session_token")
-		if err != nil || c.Value == "" {
-			http.Redirect(w, r, "/login", http.StatusFound)
-			return
-		}
-
-		if _, ok := s.sessions.Get(c.Value); !ok {
-			s.sessions.ClearCoockie(w)
-			http.Redirect(w, r, "/login", http.StatusFound)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }

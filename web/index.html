@@ -38,6 +38,17 @@
       gap: 4px;
       flex: 1;
     }
+    .header-username {
+      font-size: 14px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid #1f2933;
+      background: #020617;
+      color: #e5e7eb;
+      min-height: 26px;
+      display: inline-flex;
+      align-items: center;
+    }
     .header-row {
       display: flex;
       gap: 6px;
@@ -59,9 +70,6 @@
     #chat {
       max-width: 70px;
       text-align: center;
-    }
-    #username {
-      max-width: 160px;
     }
     .header-status {
       font-size: 11px;
@@ -148,13 +156,13 @@
     }
   </style>
 </head>
-<body>
+<body data-username="{{.Username}}">
   <div class="app">
     <div class="header">
       <div class="header-left">
         <div class="header-row">
           <label for="username">You</label>
-          <input id="username" type="text" placeholder="your name" />
+          <div id="username" class="header-username"></div>
         </div>
         <div class="header-row">
           <label for="chat">Chat</label>
@@ -173,156 +181,147 @@
   </div>
 
   <script>
-  const messagesEl = document.getElementById('messages');
-  const formEl = document.getElementById('form');
-  const inputEl = document.getElementById('input');
-  const chatEl = document.getElementById('chat');
-  const usernameEl = document.getElementById('username');
-  const statusEl = document.getElementById('status');
-  const sendBtn = document.getElementById('sendBtn');
+    const messagesEl = document.getElementById('messages');
+    const formEl = document.getElementById('form');
+    const inputEl = document.getElementById('input');
+    const chatEl = document.getElementById('chat');
+    const usernameEl = document.getElementById('username');
+    const statusEl = document.getElementById('status');
+    const sendBtn = document.getElementById('sendBtn');
+    const bodyEl = document.body;
 
-  let ws = null;
-  let currentChat = null;
-  let currentUser = null;
+    let ws = null;
+    let currentChat = null;
+    let currentUser = null;
+    let switchingChat = false;
 
-  function setStatus(text, color) {
-    statusEl.textContent = text;
-    statusEl.style.color = color || '#9ca3af';
-  }
-
-  function currentUsername() {
-    return (usernameEl.value || '').trim() || 'anon';
-  }
-
-  function addMessage(msg, isMe) {
-    const wrap = document.createElement('div');
-    wrap.className = 'msg-wrap' + (isMe ? ' me' : '');
-
-    const bubble = document.createElement('div');
-    bubble.className = 'msg' + (isMe ? ' me' : '');
-
-    const textEl = document.createElement('div');
-    textEl.className = 'msg-text';
-    textEl.textContent = msg.text;
-
-    const metaEl = document.createElement('div');
-    metaEl.className = 'msg-meta';
-    metaEl.textContent = msg.by + ' • ' + new Date(msg.at).toLocaleTimeString();
-
-    bubble.appendChild(textEl);
-    bubble.appendChild(metaEl);
-    wrap.appendChild(bubble);
-    messagesEl.appendChild(wrap);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
-
-  function connectWS() {
-    const chat = chatEl.value || '1';
-    const username = currentUsername();
-
-    // если ничего не поменялось — не дёргаем сокет зря
-    if (ws && currentChat === chat && currentUser === username && ws.readyState === WebSocket.OPEN) {
-      return;
+    function setStatus(text, color) {
+      statusEl.textContent = text;
+      statusEl.style.color = color || '#9ca3af';
     }
 
-    // закрываем старый сокет
-    if (ws) {
-      ws.onopen = null;
-      ws.onclose = null;
-      ws.onmessage = null;
-      ws.onerror = null;
-      ws.close();
-      ws = null;
+    function currentUsername() {
+      const u = bodyEl.getAttribute('data-username') || 'anon';
+      usernameEl.textContent = u;
+      return u;
     }
 
-    currentChat = chat;
-    currentUser = username;
+    function addMessage(msg, isMe) {
+      const wrap = document.createElement('div');
+      wrap.className = 'msg-wrap' + (isMe ? ' me' : '');
 
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const url = proto + '://' + location.host +
-      '/ws?chat=' + encodeURIComponent(chat) +
-      '&user=' + encodeURIComponent(username);
+      const bubble = document.createElement('div');
+      bubble.className = 'msg' + (isMe ? ' me' : '');
 
-    setStatus('Connecting...', '#9ca3af');
-    sendBtn.disabled = true;
+      const textEl = document.createElement('div');
+      textEl.className = 'msg-text';
+      textEl.textContent = msg.text;
 
-    ws = new WebSocket(url);
+      const metaEl = document.createElement('div');
+      metaEl.className = 'msg-meta';
+      metaEl.textContent = msg.by + ' • ' + new Date(msg.at).toLocaleTimeString();
 
-    ws.onopen = () => {
-      setStatus('Chat ' + chat + ' · ' + username, '#22c55e');
-      sendBtn.disabled = false;
-      inputEl.focus();
-    };
+      bubble.appendChild(textEl);
+      bubble.appendChild(metaEl);
+      wrap.appendChild(bubble);
+      messagesEl.appendChild(wrap);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
 
-    ws.onclose = (e) => {
-      // если мы сами сменили чат/имя и тут же открыли новый сокет,
-      // не рисуем "Disconnected" поверх актуального статуса
-      if (ws && ws.readyState === WebSocket.OPEN) return;
-      setStatus('Disconnected', '#f97316');
+    function connectWS() {
+      const chat = chatEl.value || '1';
+      const username = currentUsername();
+
+      if (ws && currentChat === chat && currentUser === username && ws.readyState === WebSocket.OPEN) {
+        return;
+      }
+
+      switchingChat = true;
+
+      if (ws) {
+        ws.onopen = null;
+        ws.onclose = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.close();
+        ws = null;
+      }
+
+      currentChat = chat;
+      currentUser = username;
+
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const url = proto + '://' + location.host +
+        '/ws?chat=' + encodeURIComponent(chat);
+
+      setStatus('Connecting...', '#9ca3af');
       sendBtn.disabled = true;
-    };
 
-    ws.onerror = () => {
-      setStatus('Error', '#f97316');
-    };
+      ws = new WebSocket(url);
 
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        const me = currentUsername();
-        addMessage(msg, msg.by === me);
-      } catch {}
-    };
+      ws.onopen = () => {
+        switchingChat = false;
+        setStatus('Chat ' + chat + ' · ' + username, '#22c55e');
+        sendBtn.disabled = false;
+        inputEl.focus();
+      };
+
+      ws.onclose = (e) => {
+      };
+
+      ws.onerror = () => {
+        setStatus('Error', '#f97316');
+        sendBtn.disabled = true;
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          const me = currentUsername();
+          addMessage(msg, msg.by === me);
+        } catch {}
+      };
+    }
+
+    function reconnectWS() {
+      messagesEl.innerHTML = '';
+      connectWS();
+    }
+
+    const savedChat = localStorage.getItem('lm_chat') || '1';
+    chatEl.value = savedChat;
+
+    chatEl.addEventListener('change', () => {
+      const chat = chatEl.value || '1';
+      localStorage.setItem('lm_chat', chat);
+      reconnectWS();
+    });
+
+    formEl.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = inputEl.value.trim();
+  if (!text) return;
+
+  // не отправляем, если сокет ещё не подключен
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    return;
   }
 
-  function reconnectWS() {
-    messagesEl.innerHTML = '';
+  const chat = parseInt(chatEl.value || '1', 10);
+  const by = currentUsername();
+
+  fetch('/message', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, by, chat })
+  }).catch(() => {});
+
+  inputEl.value = '';
+  inputEl.focus();
+});
+
+    currentUsername();
     connectWS();
-  }
-
-  // username из localStorage
-  const savedName = localStorage.getItem('lm_username') || '';
-  if (savedName) {
-    usernameEl.value = savedName;
-  }
-
-  // chat из localStorage
-  const savedChat = localStorage.getItem('lm_chat') || '1';
-  chatEl.value = savedChat;
-
-  usernameEl.addEventListener('change', () => {
-    const name = currentUsername();
-    localStorage.setItem('lm_username', name);
-    reconnectWS();
-  });
-
-  chatEl.addEventListener('change', () => {
-    const chat = chatEl.value || '1';
-    localStorage.setItem('lm_chat', chat);
-    reconnectWS();
-  });
-
-  formEl.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const text = inputEl.value.trim();
-    if (!text) return;
-
-    const chat = parseInt(chatEl.value || '1', 10);
-    const by = currentUsername();
-
-    fetch('/message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, by, chat })
-    }).catch(() => {});
-
-    inputEl.value = '';
-    inputEl.focus();
-  });
-
-  // автоподключение при загрузке
-  connectWS();
-</script>
-
+  </script>
 </body>
 </html>

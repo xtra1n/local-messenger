@@ -62,7 +62,7 @@ func (s *sqliteUserStore) GetUserByUsername(ctx context.Context, username string
 		`SELECT id, username, password_hash, created_at
          FROM users
          WHERE username = ?`, username,
-	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u, u.CreatedAt)
+	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.CreatedAt)
 
 	return u, err
 }

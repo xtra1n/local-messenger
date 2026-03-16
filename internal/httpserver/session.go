@@ -61,11 +61,34 @@ func (s *sessionStore) Delete(token string) {
 	delete(s.sessions, token)
 }
 
-func (s *sessionStore) ClearCoockie(w http.ResponseWriter) {
+func (s *sessionStore) ClearCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:    "session_token",
 		Value:   "",
 		Path:    "/",
 		Expires: time.Now().Add(-time.Hour),
+	})
+}
+
+func (s *Server) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/login" || r.URL.Path == "/signup" || r.URL.Path == "/healthz" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		c, err := r.Cookie("session_token")
+		if err != nil || c.Value == "" {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		if _, ok := s.sessions.Get(c.Value); !ok {
+			s.sessions.ClearCookie(w)
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }

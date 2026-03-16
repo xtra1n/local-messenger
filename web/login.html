@@ -2,23 +2,69 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Log in</title>
+  <title>Log in · Телеграмма</title>
+  <link rel="stylesheet" href="/static/auth.css" />
 </head>
 <body>
-  <h1>Log in</h1>
-  <form method="POST" action="/login">
-    <label>
-      Username:
-      <input type="text" name="username" required />
-    </label>
-    <br />
-    <label>
-      Password:
-      <input type="password" name="password" required />
-    </label>
-    <br />
-    <button type="submit">Log in</button>
-  </form>
-  <p>No account? <a href="/signup">Sign up</a></p>
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-card-inner">
+        <div class="auth-header">
+          <div>
+            <h1 class="auth-title">Log in</h1>
+            <p class="auth-subtitle">Войдите, чтобы продолжить переписку.</p>
+          </div>
+          <div class="auth-badge">Телеграмма</div>
+        </div>
+
+        {{if .Error}}
+        <div class="auth-error">{{.Error}}</div>
+        {{end}}
+
+        <form method="POST" action="/login">
+          <div class="auth-field">
+            <div class="auth-label-row">
+              <label class="auth-label" for="username">Username</label>
+              <span class="auth-hint">Как при регистрации</span>
+            </div>
+            <input
+              id="username"
+              class="auth-input"
+              type="text"
+              name="username"
+              required
+              autocomplete="username"
+              placeholder="andrey"
+              value="{{.Username}}"
+            />
+          </div>
+
+          <div class="auth-field">
+            <div class="auth-label-row">
+              <label class="auth-label" for="password">Password</label>
+            </div>
+            <input
+              id="password"
+              class="auth-input"
+              type="password"
+              name="password"
+              required
+              autocomplete="current-password"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <div class="auth-actions">
+            <button class="auth-button" type="submit">Log in</button>
+            <a class="auth-link" href="/signup">Создать новый аккаунт</a>
+          </div>
+
+          <p class="auth-footer-note">
+            Если забыли пароль — просто создайте нового пользователя, это пет‑проект.
+          </p>
+        </form>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

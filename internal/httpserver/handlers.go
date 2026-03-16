@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/xtra1n/local-messenger/internal/messenger"
@@ -24,47 +25,63 @@ func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) loginPageHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("web/login.html")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("template error"))
+		return
+	}
+
+	type viewData struct {
+		Error    string
+		Username string
+	}
+
 	switch r.Method {
 	case http.MethodGet:
-		tmpl, err := template.ParseFiles("web/login.html")
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("template error"))
-			return
-		}
-		tmpl.Execute(w, nil)
+		_ = tmpl.Execute(w, nil)
+		return
+
 	case http.MethodPost:
-		username := r.FormValue("username")
+		username := strings.TrimSpace(r.FormValue("username"))
 		password := r.FormValue("password")
+
+		data := viewData{Username: username}
 
 		if username == "" || password == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("username and password required"))
+			data.Error = "Username и пароль обязательны"
+			_ = tmpl.Execute(w, data)
 			return
 		}
 
 		ctx := r.Context()
 		user, err := s.userStore.GetUserByUsername(ctx, username)
 		if err != nil {
+			s.log.Error("login: GetUserByUsername error: ", err)
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("invalid credentials"))
+			data.Error = "Неверное имя пользователя или пароль"
+			_ = tmpl.Execute(w, data)
 			return
 		}
 
 		if !messenger.CheckPassword(password, user.PasswordHash) {
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("invalid credentials"))
+			data.Error = "Неверное имя пользователя или пароль"
+			_ = tmpl.Execute(w, data)
 			return
 		}
 
 		token, err := s.sessions.newToken()
 		if err != nil {
+			s.log.Error("login: newToken error: ", err)
 			w.WriteHeader(http.StatusInternalServerError)
+			data.Error = "Внутренняя ошибка, попробуйте позже"
+			_ = tmpl.Execute(w, data)
 			return
 		}
 
 		s.sessions.Set(token, username, 24*time.Hour)
-
 		http.SetCookie(w, &http.Cookie{
 			Name:     "session_token",
 			Value:    token,
@@ -73,42 +90,68 @@ func (s *Server) loginPageHandler(w http.ResponseWriter, r *http.Request) {
 		})
 
 		http.Redirect(w, r, "/", http.StatusFound)
+		return
+
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
 	}
 }
 
 func (s *Server) signupPageHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("web/signup.html")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("template error"))
+		return
+	}
+
+	type viewData struct {
+		Error    string
+		Username string
+	}
+
 	switch r.Method {
 	case http.MethodGet:
-		tmpl, err := template.ParseFiles("web/signup.html")
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("template error"))
+		_ = tmpl.Execute(w, nil)
+		return
+
+	case http.MethodPost:
+		username := strings.TrimSpace(r.FormValue("username"))
+		password := r.FormValue("password")
+		password2 := r.FormValue("password2")
+
+		data := viewData{Username: username}
+
+		if username == "" || password == "" || password2 == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			data.Error = "Все поля обязательны"
+			_ = tmpl.Execute(w, data)
 			return
 		}
-		tmpl.Execute(w, nil)
-	case http.MethodPost:
-		username := r.FormValue("username")
-		password := r.FormValue("password")
 
-		if username == "" || password == "" {
+		if password != password2 {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("username and password required"))
+			data.Error = "Пароли не совпадают"
+			_ = tmpl.Execute(w, data)
 			return
 		}
 
 		ctx := r.Context()
 		if err := s.userStore.CreateUser(ctx, username, password); err != nil {
+			s.log.Error("signup: CreateUser error: ", err)
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("could not create user"))
+			data.Error = "Не удалось создать пользователя (возможно, имя занято)"
+			_ = tmpl.Execute(w, data)
 			return
 		}
+
 		http.Redirect(w, r, "/login", http.StatusFound)
+		return
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
-
+		return
 	}
 }
 
