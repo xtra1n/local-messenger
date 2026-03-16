@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/xtra1n/local-messenger/pkg/logger"
@@ -15,17 +14,17 @@ type messenger struct {
 	log       *logger.Logger
 	metrics   *Metrics
 	listeners *listenerMap
-	historyMu sync.RWMutex
-	history   map[int][]Message
+
+	store MessageStore
 }
 
-func New(log *logger.Logger) Messenger {
+func New(log *logger.Logger, store MessageStore) Messenger {
 	return &messenger{
 		input:     make(chan Message, 1000),
 		log:       log,
 		metrics:   &Metrics{},
 		listeners: newListnersMap(),
-		history:   make(map[int][]Message),
+		store:     store,
 	}
 }
 
@@ -42,6 +41,8 @@ func (m *messenger) Run(ctx context.Context) error {
 }
 
 func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -62,7 +63,11 @@ func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m.appendToHistory(msg)
+	if m.store != nil {
+		if err := m.store.SaveMessage(ctx, msg); err != nil {
+			m.log.Error("failed to save message to store: ", err)
+		}
+	}
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("message sent"))
@@ -73,13 +78,20 @@ func (m *messenger) Subscribe(chatID int, deviceID int) <-chan Message {
 }
 
 func (m *messenger) getHistory(chatID int) []Message {
-	m.historyMu.RLock()
-	defer m.historyMu.RUnlock()
+	if m.store == nil {
+		return nil
+	}
 
-	msgs := m.history[chatID]
-	out := make([]Message, len(msgs))
-	copy(out, msgs)
-	return out
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	msgs, err := m.store.GetRecentMessages(ctx, chatID, 100)
+	if err != nil {
+		m.log.Error("failed to load history from store chat=", chatID, " err=", err)
+		return nil
+	}
+
+	return msgs
 }
 
 func (m *messenger) decodeMessage(r *http.Request) (Message, error) {
@@ -99,18 +111,4 @@ func (m *messenger) enqueueMessage(msg Message) bool {
 	case <-time.After(5 * time.Second):
 		return false
 	}
-}
-
-func (m *messenger) appendToHistory(msg Message) {
-	m.historyMu.Lock()
-	defer m.historyMu.Unlock()
-
-	msgs := m.history[msg.Chat]
-	msgs = append(msgs, msg)
-
-	if len(msgs) > 100 {
-		msgs = msgs[len(msgs)-100:]
-	}
-
-	m.history[msg.Chat] = msgs
 }

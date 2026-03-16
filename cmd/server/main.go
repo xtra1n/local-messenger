@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"os/signal"
 	"syscall"
+
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/xtra1n/local-messenger/internal/config"
 	"github.com/xtra1n/local-messenger/internal/httpserver"
@@ -13,10 +16,21 @@ import (
 
 func main() {
 	cfg := config.Load()
-
 	log := logger.New(cfg.LogLevel)
 
-	m := messenger.New(log)
+	db, err := sql.Open("sqlite3", cfg.DBPath)
+	if err != nil {
+		log.Fatal("failed to open sqlite db: ", err)
+	}
+	defer db.Close()
+
+	if err := initDB(db); err != nil {
+		log.Fatal("failed to init sqlite schema", err)
+	}
+
+	store := messenger.NewSQLiteStore(db)
+
+	m := messenger.New(log, store)
 	srv := httpserver.New(cfg, log, m)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
