@@ -15,6 +15,12 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+func fnv32(s string) int {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(s))
+	return int(h.Sum32())
+}
+
 func (m *messenger) HandleWS(w http.ResponseWriter, r *http.Request) {
 	chatStr := r.URL.Query().Get("chat")
 	user := r.URL.Query().Get("user")
@@ -86,20 +92,4 @@ func (m *messenger) HandleWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-}
-
-func fnv32(s string) int {
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(s))
-	return int(h.Sum32())
-}
-
-func (m *messenger) getHistory(chatID int) []Message {
-	m.historyMu.RLock()
-	defer m.historyMu.RUnlock()
-
-	msgs := m.history[chatID]
-	out := make([]Message, len(msgs))
-	copy(out, msgs)
-	return out
 }
