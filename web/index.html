@@ -173,134 +173,156 @@
   </div>
 
   <script>
-    const messagesEl = document.getElementById('messages');
-    const formEl = document.getElementById('form');
-    const inputEl = document.getElementById('input');
-    const chatEl = document.getElementById('chat');
-    const usernameEl = document.getElementById('username');
-    const statusEl = document.getElementById('status');
-    const sendBtn = document.getElementById('sendBtn');
+  const messagesEl = document.getElementById('messages');
+  const formEl = document.getElementById('form');
+  const inputEl = document.getElementById('input');
+  const chatEl = document.getElementById('chat');
+  const usernameEl = document.getElementById('username');
+  const statusEl = document.getElementById('status');
+  const sendBtn = document.getElementById('sendBtn');
 
-    let ws = null;
+  let ws = null;
+  let currentChat = null;
+  let currentUser = null;
 
-    function setStatus(text, color) {
-      statusEl.textContent = text;
-      statusEl.style.color = color || '#9ca3af';
+  function setStatus(text, color) {
+    statusEl.textContent = text;
+    statusEl.style.color = color || '#9ca3af';
+  }
+
+  function currentUsername() {
+    return (usernameEl.value || '').trim() || 'anon';
+  }
+
+  function addMessage(msg, isMe) {
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-wrap' + (isMe ? ' me' : '');
+
+    const bubble = document.createElement('div');
+    bubble.className = 'msg' + (isMe ? ' me' : '');
+
+    const textEl = document.createElement('div');
+    textEl.className = 'msg-text';
+    textEl.textContent = msg.text;
+
+    const metaEl = document.createElement('div');
+    metaEl.className = 'msg-meta';
+    metaEl.textContent = msg.by + ' • ' + new Date(msg.at).toLocaleTimeString();
+
+    bubble.appendChild(textEl);
+    bubble.appendChild(metaEl);
+    wrap.appendChild(bubble);
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function connectWS() {
+    const chat = chatEl.value || '1';
+    const username = currentUsername();
+
+    // если ничего не поменялось — не дёргаем сокет зря
+    if (ws && currentChat === chat && currentUser === username && ws.readyState === WebSocket.OPEN) {
+      return;
     }
 
-    function currentUsername() {
-      return (usernameEl.value || '').trim() || 'anon';
+    // закрываем старый сокет
+    if (ws) {
+      ws.onopen = null;
+      ws.onclose = null;
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.close();
+      ws = null;
     }
 
-    function addMessage(msg, isMe) {
-      const wrap = document.createElement('div');
-      wrap.className = 'msg-wrap' + (isMe ? ' me' : '');
+    currentChat = chat;
+    currentUser = username;
 
-      const bubble = document.createElement('div');
-      bubble.className = 'msg' + (isMe ? ' me' : '');
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const url = proto + '://' + location.host +
+      '/ws?chat=' + encodeURIComponent(chat) +
+      '&user=' + encodeURIComponent(username);
 
-      const textEl = document.createElement('div');
-      textEl.className = 'msg-text';
-      textEl.textContent = msg.text;
+    setStatus('Connecting...', '#9ca3af');
+    sendBtn.disabled = true;
 
-      const metaEl = document.createElement('div');
-      metaEl.className = 'msg-meta';
-      metaEl.textContent = msg.by + ' • ' + new Date(msg.at).toLocaleTimeString();
+    ws = new WebSocket(url);
 
-      bubble.appendChild(textEl);
-      bubble.appendChild(metaEl);
-      wrap.appendChild(bubble);
-      messagesEl.appendChild(wrap);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-
-    function connectWS() {
-      const chat = chatEl.value || '1';
-      const username = currentUsername();
-
-      if (ws) {
-        ws.close();
-        ws = null;
-      }
-
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const url = proto + '://' + location.host +
-        '/ws?chat=' + encodeURIComponent(chat) +
-        '&user=' + encodeURIComponent(username);
-
-      setStatus('Connecting...', '#9ca3af');
-      sendBtn.disabled = true;
-
-      ws = new WebSocket(url);
-
-      ws.onopen = () => {
-        setStatus('Chat ' + chat + ' · ' + username, '#22c55e');
-        sendBtn.disabled = false;
-        inputEl.focus();
-      };
-      ws.onclose = () => {
-        setStatus('Disconnected', '#f97316');
-        sendBtn.disabled = true;
-      };
-      ws.onerror = () => {
-        setStatus('Error', '#f97316');
-      };
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          const me = currentUsername();
-          addMessage(msg, msg.by === me);
-        } catch {}
-      };
-    }
-
-    function reconnectWS() {
-      messagesEl.innerHTML = '';
-      connectWS();
-    }
-
-    // username из localStorage
-    const savedName = localStorage.getItem('lm_username') || '';
-    if (savedName) {
-      usernameEl.value = savedName;
-    }
-
-    // chat из localStorage
-    const savedChat = localStorage.getItem('lm_chat') || '1';
-    chatEl.value = savedChat;
-
-    usernameEl.addEventListener('change', () => {
-      const name = currentUsername();
-      localStorage.setItem('lm_username', name);
-      reconnectWS();
-    });
-
-    chatEl.addEventListener('change', () => {
-      const chat = chatEl.value || '1';
-      localStorage.setItem('lm_chat', chat);
-      reconnectWS();
-    });
-
-    formEl.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const text = inputEl.value.trim();
-      if (!text) return;
-
-      const chat = parseInt(chatEl.value || '1', 10);
-      const by = currentUsername();
-
-      fetch('/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, by, chat })
-      }).catch(() => {});
-
-      inputEl.value = '';
+    ws.onopen = () => {
+      setStatus('Chat ' + chat + ' · ' + username, '#22c55e');
+      sendBtn.disabled = false;
       inputEl.focus();
-    });
+    };
 
-    // автоподключение при загрузке
+    ws.onclose = (e) => {
+      // если мы сами сменили чат/имя и тут же открыли новый сокет,
+      // не рисуем "Disconnected" поверх актуального статуса
+      if (ws && ws.readyState === WebSocket.OPEN) return;
+      setStatus('Disconnected', '#f97316');
+      sendBtn.disabled = true;
+    };
+
+    ws.onerror = () => {
+      setStatus('Error', '#f97316');
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        const me = currentUsername();
+        addMessage(msg, msg.by === me);
+      } catch {}
+    };
+  }
+
+  function reconnectWS() {
+    messagesEl.innerHTML = '';
     connectWS();
-  </script>
+  }
+
+  // username из localStorage
+  const savedName = localStorage.getItem('lm_username') || '';
+  if (savedName) {
+    usernameEl.value = savedName;
+  }
+
+  // chat из localStorage
+  const savedChat = localStorage.getItem('lm_chat') || '1';
+  chatEl.value = savedChat;
+
+  usernameEl.addEventListener('change', () => {
+    const name = currentUsername();
+    localStorage.setItem('lm_username', name);
+    reconnectWS();
+  });
+
+  chatEl.addEventListener('change', () => {
+    const chat = chatEl.value || '1';
+    localStorage.setItem('lm_chat', chat);
+    reconnectWS();
+  });
+
+  formEl.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    const chat = parseInt(chatEl.value || '1', 10);
+    const by = currentUsername();
+
+    fetch('/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, by, chat })
+    }).catch(() => {});
+
+    inputEl.value = '';
+    inputEl.focus();
+  });
+
+  // автоподключение при загрузке
+  connectWS();
+</script>
+
 </body>
 </html>

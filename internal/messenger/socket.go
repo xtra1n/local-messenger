@@ -45,7 +45,7 @@ func (m *messenger) HandleWS(w http.ResponseWriter, r *http.Request) {
 	defer m.unsubscribe(chatID, deviceID, user)
 
 	if err := m.sendHistory(conn, chatID, user); err != nil {
-		return
+		m.log.Error("failed to send history chat=", chatID, " user=", user, " err=", err)
 	}
 
 	go m.consumeClienMessages(conn, chatID, deviceID)

@@ -20,3 +20,8 @@ type Messenger interface {
 	Subscribe(chatID int, deviceID int) <-chan Message
 	HandleWS(w http.ResponseWriter, r *http.Request)
 }
+
+type MessageStore interface {
+	SaveMessage(ctx context.Context, msg Message) error
+	GetRecentMessages(ctx context.Context, chatID int, limit int) ([]Message, error)
+}
