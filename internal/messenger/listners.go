@@ -53,10 +53,23 @@ func (l *listenerMap) Remove(chatID int, deviceID int) {
 		return
 	}
 	if ch, ok := devices[deviceID]; ok {
-		close(ch) // закрываем канал для этого девайса
+		close(ch)
 		delete(devices, deviceID)
 	}
 	if len(devices) == 0 {
+		delete(l.data, chatID)
+	}
+}
+
+func (l *listenerMap) CloseAll() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	for chatID, devices := range l.data {
+		for deviceID, ch := range devices {
+			close(ch)
+			delete(devices, deviceID)
+		}
 		delete(l.data, chatID)
 	}
 }

@@ -10,21 +10,6 @@ import (
 	"github.com/xtra1n/local-messenger/pkg/logger"
 )
 
-type Message struct {
-	Text string    `json:"text"`
-	At   time.Time `json:"at"`
-	By   string    `json:"by"`
-	Chat int       `json:"chat"`
-}
-
-type Messenger interface {
-	Run(ctx context.Context) error
-	AddMessage(w http.ResponseWriter, r *http.Request)
-	MetricsHandler(w http.ResponseWriter, r *http.Request)
-	Subscribe(chatID int, deviceID int) <-chan Message
-	HandleWS(w http.ResponseWriter, r *http.Request)
-}
-
 type messenger struct {
 	input     chan Message
 	log       *logger.Logger
@@ -52,34 +37,8 @@ func (m *messenger) Run(ctx context.Context) error {
 	<-ctx.Done()
 	m.log.Info("messenger stopped")
 
+	m.listeners.CloseAll()
 	return ctx.Err()
-}
-
-func (m *messenger) distributor(ctx context.Context) {
-	m.log.Info("distributor worker started")
-
-	for {
-		select {
-		case <-ctx.Done():
-			m.log.Info("distributor worker stopping")
-			return
-		case msg := <-m.input:
-			listeneres := m.listeners.GetChatListeners(msg.Chat)
-			if len(listeneres) == 0 {
-				m.log.Debug("no listeners for chat ", msg.Chat)
-				continue
-			}
-
-			for deviceID, ch := range listeneres {
-				select {
-				case ch <- msg:
-					m.metrics.messagesSampled.Add(1)
-				default:
-					m.log.Debug("listener channel full, chat=", msg.Chat, " device=", deviceID)
-				}
-			}
-		}
-	}
 }
 
 func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +65,7 @@ func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
 		msgs = append(msgs, msg)
 
 		if len(msgs) > 100 {
-			msgs = msgs[len(msgs) - 100:]
+			msgs = msgs[len(msgs)-100:]
 		}
 
 		m.history[msg.Chat] = msgs
@@ -123,4 +82,14 @@ func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
 
 func (m *messenger) Subscribe(chatID int, deviceID int) <-chan Message {
 	return m.listeners.Get(chatID, deviceID)
+}
+
+func (m *messenger) getHistory(chatID int) []Message {
+	m.historyMu.RLock()
+	defer m.historyMu.RUnlock()
+
+	msgs := m.history[chatID]
+	out := make([]Message, len(msgs))
+	copy(out, msgs)
+	return out
 }
