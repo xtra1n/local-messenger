@@ -47,37 +47,25 @@ func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var msg Message
-	if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("invalid JSON"))
+	msg, err := m.decodeMessage(r)
+	if err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	msg.At = time.Now()
 
-	select {
-	case m.input <- msg:
-		m.metrics.messagesAccepted.Add(1)
-
-		m.historyMu.Lock()
-		msgs := m.history[msg.Chat]
-		msgs = append(msgs, msg)
-
-		if len(msgs) > 100 {
-			msgs = msgs[len(msgs)-100:]
-		}
-
-		m.history[msg.Chat] = msgs
-		m.historyMu.Unlock()
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("message sent"))
-	case <-time.After(5 * time.Second):
+	if !m.enqueueMessage(msg) {
 		m.metrics.messagesDropped.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte("system overloaded, try again later"))
+		return
 	}
+
+	m.appendToHistory(msg)
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("message sent"))
 }
 
 func (m *messenger) Subscribe(chatID int, deviceID int) <-chan Message {
@@ -92,4 +80,37 @@ func (m *messenger) getHistory(chatID int) []Message {
 	out := make([]Message, len(msgs))
 	copy(out, msgs)
 	return out
+}
+
+func (m *messenger) decodeMessage(r *http.Request) (Message, error) {
+	var msg Message
+	if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+		return Message{}, err
+	}
+
+	return msg, nil
+}
+
+func (m *messenger) enqueueMessage(msg Message) bool {
+	select {
+	case m.input <- msg:
+		m.metrics.messagesAccepted.Add(1)
+		return true
+	case <-time.After(5 * time.Second):
+		return false
+	}
+}
+
+func (m *messenger) appendToHistory(msg Message) {
+	m.historyMu.Lock()
+	defer m.historyMu.Unlock()
+
+	msgs := m.history[msg.Chat]
+	msgs = append(msgs, msg)
+
+	if len(msgs) > 100 {
+		msgs = msgs[len(msgs)-100:]
+	}
+
+	m.history[msg.Chat] = msgs
 }
