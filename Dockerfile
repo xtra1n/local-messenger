@@ -22,6 +22,10 @@ RUN apk add --no-cache ca-certificates
 COPY --from=builder /app/app .
 COPY web ./web
 
+COPY data ./data
+
+RUN mkdir -p /app/data
+
 ENV HTTP_PORT=8080
 ENV LOG_LEVEL=info
 
