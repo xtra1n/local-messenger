@@ -29,6 +29,7 @@ func main() {
 	}
 
 	store := messenger.NewSQLiteStore(db)
+	userStore := messenger.NewSQLiteUserStore(db)
 
 	m := messenger.New(log, store)
 	srv := httpserver.New(cfg, log, m)
