@@ -14,19 +14,27 @@ type Server struct {
 	cfg       *config.Config
 	log       *logger.Logger
 	messenger messenger.Messenger
+	userStore messenger.UserStore
+	sessions   *sessionStore
 	srv       *http.Server
 }
 
-func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger) *Server {
+func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger, us messenger.UserStore) *Server {
 	s := &Server{
 		cfg:       cfg,
 		log:       log,
 		messenger: m,
+		userStore: us,
+		session: newSessionStore(),
 	}
 
 	mux := http.NewServeMux()
 	fileServer := http.FileServer(http.Dir("web"))
-	mux.Handle("/", fileServer)
+	mux.Handle("/", s.authMiddleware(fileServer))
+
+	mux.HandleFunc("/login", s.loginPageHandler)
+	mux.HandleFunc("/signup", s.signupPageHandler)
+
 	mux.HandleFunc("/healthz", s.healthHandler)
 	mux.HandleFunc("/message", s.messageHandler)
 	mux.HandleFunc("/metrics", s.metricsHandler)
@@ -56,4 +64,27 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	defer cancel()
 
 	return s.srv.Shutdown(ctx)
+}
+
+func (s *Server) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/login" || r.URL.Path == "/signup" || r.URL.Path == "/healthz" {
+			next.ServeHTTP(w, r)
+			return 
+		}
+
+		c, err := r.Cookie("session_token")
+		if err != nil || c.Value == "" {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return 
+		}
+
+		if _, ok := s.sessions.Get(c.Value); !ok {
+			s.sessions.ClearCoockie(w)
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return 
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
