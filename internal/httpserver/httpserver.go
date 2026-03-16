@@ -15,7 +15,7 @@ type Server struct {
 	log       *logger.Logger
 	messenger messenger.Messenger
 	userStore messenger.UserStore
-	sessions   *sessionStore
+	sessions  *sessionStore
 	srv       *http.Server
 }
 
@@ -25,7 +25,7 @@ func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger, us messe
 		log:       log,
 		messenger: m,
 		userStore: us,
-		session: newSessionStore(),
+		sessions:   newSessionStore(),
 	}
 
 	mux := http.NewServeMux()
@@ -70,19 +70,19 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/login" || r.URL.Path == "/signup" || r.URL.Path == "/healthz" {
 			next.ServeHTTP(w, r)
-			return 
+			return
 		}
 
 		c, err := r.Cookie("session_token")
 		if err != nil || c.Value == "" {
 			http.Redirect(w, r, "/login", http.StatusFound)
-			return 
+			return
 		}
 
 		if _, ok := s.sessions.Get(c.Value); !ok {
 			s.sessions.ClearCoockie(w)
 			http.Redirect(w, r, "/login", http.StatusFound)
-			return 
+			return
 		}
 
 		next.ServeHTTP(w, r)

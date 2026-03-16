@@ -32,7 +32,7 @@ func main() {
 	userStore := messenger.NewSQLiteUserStore(db)
 
 	m := messenger.New(log, store)
-	srv := httpserver.New(cfg, log, m)
+	srv := httpserver.New(cfg, log, m, userStore)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

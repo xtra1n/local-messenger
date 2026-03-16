@@ -153,5 +153,21 @@ func (s *Server) streamHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie("session_token")
+	if err != nil || c.Value == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	sess, ok := s.sessions.Get(c.Value)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	q := r.URL.Query()
+	q.Set("user", sess.Username)
+	r.URL.RawQuery = q.Encode()
+
 	s.messenger.HandleWS(w, r)
 }
