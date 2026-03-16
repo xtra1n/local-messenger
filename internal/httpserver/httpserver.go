@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"html/template"
 	"net/http"
 	"time"
 
@@ -14,24 +15,62 @@ type Server struct {
 	cfg       *config.Config
 	log       *logger.Logger
 	messenger messenger.Messenger
+	userStore messenger.UserStore
+	sessions  *sessionStore
 	srv       *http.Server
 }
 
-func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger) *Server {
+func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger, us messenger.UserStore) *Server {
 	s := &Server{
 		cfg:       cfg,
 		log:       log,
 		messenger: m,
+		userStore: us,
+		sessions:  newSessionStore(),
 	}
 
 	mux := http.NewServeMux()
 	fileServer := http.FileServer(http.Dir("web"))
-	mux.Handle("/", fileServer)
+	mux.Handle("/static/", http.StripPrefix("/static/", fileServer))
+
+	mux.Handle("/", s.authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := r.Cookie("session_token")
+		if err != nil || c.Value == "" {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		sess, ok := s.sessions.Get(c.Value)
+		if !ok {
+			s.sessions.ClearCookie(w)
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		tmpl, err := template.ParseFiles("web/index.html")
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("template error"))
+			return
+		}
+
+		data := struct {
+			Username string
+		}{
+			Username: sess.Username,
+		}
+
+		_ = tmpl.Execute(w, data)
+	})))
+
+	mux.HandleFunc("/login", s.loginPageHandler)
+	mux.HandleFunc("/signup", s.signupPageHandler)
+
 	mux.HandleFunc("/healthz", s.healthHandler)
 	mux.HandleFunc("/message", s.messageHandler)
 	mux.HandleFunc("/metrics", s.metricsHandler)
 	mux.HandleFunc("/debug/stream", s.streamHandler)
-	mux.HandleFunc("/ws", s.wsHandler)
+	mux.Handle("/ws", s.authMiddleware(http.HandlerFunc(s.wsHandler)))
 
 	s.srv = &http.Server{
 		Addr:    ":" + cfg.HTTPPort,

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sign up · Local Messenger</title>
+  <link rel="stylesheet" href="/static/auth.css" />
+</head>
+<body>
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-card-inner">
+        <div class="auth-header">
+          <div>
+            <h1 class="auth-title">Create account</h1>
+            <p class="auth-subtitle">Заведите аккаунт, чтобы писать в локальный чат.</p>
+          </div>
+          <div class="auth-badge">Local messenger</div>
+        </div>
+
+        {{if .Error}}
+        <div class="auth-error">{{.Error}}</div>
+        {{end}}
+
+        <form method="POST" action="/signup">
+          <div class="auth-field">
+            <div class="auth-label-row">
+              <label class="auth-label" for="username">Username</label>
+              <span class="auth-hint">Только латиница и цифры</span>
+            </div>
+            <input
+              id="username"
+              class="auth-input"
+              type="text"
+              name="username"
+              required
+              autocomplete="username"
+              placeholder="например, andrey"
+              value="{{.Username}}"
+            />
+          </div>
+
+          <div class="auth-field">
+            <div class="auth-label-row">
+              <label class="auth-label" for="password">Password</label>
+              <span class="auth-hint">Минимум 6 символов</span>
+            </div>
+            <input
+              id="password"
+              class="auth-input"
+              type="password"
+              name="password"
+              required
+              autocomplete="new-password"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <div class="auth-field">
+            <div class="auth-label-row">
+              <label class="auth-label" for="password2">Repeat password</label>
+            </div>
+            <input
+              id="password2"
+              class="auth-input"
+              type="password"
+              name="password2"
+              required
+              autocomplete="new-password"
+              placeholder="повторите пароль"
+            />
+          </div>
+
+          <div class="auth-actions">
+            <button class="auth-button" type="submit">Sign up</button>
+            <a class="auth-link" href="/login">У меня уже есть аккаунт</a>
+          </div>
+
+          <p class="auth-footer-note">
+            Аккаунт хранится локально в SQLite, пароль не видно в явном виде.
+          </p>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
