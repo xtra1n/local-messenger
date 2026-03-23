@@ -55,7 +55,7 @@ func (l *Logger) Info(msg string, args ...any) {
 }
 
 func (l *Logger) Warn(msg string, args ...any) {
-	l.Logger.Info(msg, args...)
+	l.Logger.Warn(msg, args...)
 }
 
 func (l *Logger) Error(msg string, args ...any) {
