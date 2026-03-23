@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
 	"github.com/xtra1n/local-messenger/internal/domain"
 )
 

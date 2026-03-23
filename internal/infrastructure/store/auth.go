@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/xtra1n/local-messenger/internal/domain"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/xtra1n/local-messenger/internal/domain"
 )
 
 type sqliteUserStore struct {

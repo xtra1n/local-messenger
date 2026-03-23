@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os/signal"
 	"syscall"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -33,9 +34,23 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to open sqlite db: ", err)
 	}
+
 	defer func() {
 		_ = db.Close()
 	}()
+
+	db.SetMaxOpenConns(cfg.Database.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
+	if err := db.Ping(); err != nil {
+		log.Fatal("failed to ping database: ", err)
+	}
+
+	log.Info("database connected",
+		"max_open", cfg.Database.MaxOpenConns,
+		"max_idle", cfg.Database.MaxIdleConns,
+	)
 
 	if err := initDB(db); err != nil {
 		log.Fatal("failed to init sqlite schema", err)
