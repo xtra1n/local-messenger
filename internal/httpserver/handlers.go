@@ -13,7 +13,7 @@ import (
 
 func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
+	_, _ = w.Write([]byte("ok"))
 }
 
 func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +28,7 @@ func (s *Server) loginPageHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("web/login.html")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("template error"))
+		_, _ = w.Write([]byte("template error"))
 		return
 	}
 
@@ -102,7 +102,7 @@ func (s *Server) signupPageHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("web/signup.html")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("template error"))
+		_, _ = w.Write([]byte("template error"))
 		return
 	}
 
@@ -159,14 +159,14 @@ func (s *Server) streamHandler(w http.ResponseWriter, r *http.Request) {
 	chatStr := r.URL.Query().Get("chat")
 	if chatStr == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("chat query param required"))
+		_, _ = w.Write([]byte("chat query param required"))
 		return
 	}
 
 	chatID, err := strconv.Atoi(chatStr)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("invalid chat id"))
+		_, _ = w.Write([]byte("invalid chat id"))
 		return
 	}
 

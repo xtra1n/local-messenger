@@ -1,4 +1,4 @@
-FROM golang:1.25.0-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Нужен компилятор C для go-sqlite3
 RUN apk add --no-cache build-base
