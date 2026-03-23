@@ -3,6 +3,7 @@
 BINARY_NAME=local-messenger
 CMD_PATH=./cmd/server
 MAIN_GO=$(CMD_PATH)/main.go
+ENV? = dev
 
 help:
 	@echo "Available commands:"
@@ -24,7 +25,14 @@ build:
 	go build -v -o $(BINARY_NAME) $(CMD_PATH)
 
 run: build
+	@echo "Running with ENV=$(ENV)..."
 	./$(BINARY_NAME)
+
+run-dev:
+	@ENV=dev $(MAKE) run
+
+run-prod:
+	@ENV=prod $(MAKE) run
 
 test:
 	go test -v ./...
@@ -41,7 +49,7 @@ fmt:
 	goimports -local github.com/xtra1n/local-messenger -w .
 
 docker-build:
-	docker build -t local-messenger .
+	docker build --build-arg ENV=$(ENV) -t local-messenger:$(ENV) .
 
 docker-run:
 	docker run -p 8080:8080 -v $(PWD)/data:/app/data local-messenger
