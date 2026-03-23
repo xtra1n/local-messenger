@@ -1,33 +1,35 @@
-package messenger
+package store
 
 import (
 	"context"
 	"database/sql"
+
+	"github.com/xtra1n/local-messenger/internal/domain"
 )
 
 type sqliteStore struct {
 	db *sql.DB
 }
 
-func NewSQLiteStore(db *sql.DB) MessageStore {
+func NewSQLiteStore(db *sql.DB) domain.MessageStore {
 	return &sqliteStore{db: db}
 }
 
-func (s *sqliteStore) SaveMessage(ctx context.Context, msg Message) error {
+func (s *sqliteStore) SaveMessage(ctx context.Context, msg domain.Message) error {
 	_, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO messages (chat_id, by_user, text, at) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO Messages (chat_id, by_user, text, at) VALUES (?, ?, ?, ?)`,
 		msg.Chat, msg.By, msg.Text, msg.At,
 	)
 
 	return err
 }
 
-func (s *sqliteStore) GetRecentMessages(ctx context.Context, chatID int, limit int) ([]Message, error) {
+func (s *sqliteStore) GetRecentMessages(ctx context.Context, chatID int, limit int) ([]domain.Message, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
 		`SELECT chat_id, by_user, text, at
-         FROM messages
+         FROM Messages
          WHERE chat_id = ?
          ORDER BY id DESC
          LIMIT ?`,
@@ -41,9 +43,9 @@ func (s *sqliteStore) GetRecentMessages(ctx context.Context, chatID int, limit i
 		_ = rows.Close()
 	}()
 
-	var msgs []Message
+	var msgs []domain.Message
 	for rows.Next() {
-		var m Message
+		var m domain.Message
 		if err := rows.Scan(&m.Chat, &m.By, &m.Text, &m.At); err != nil {
 			return nil, err
 		}

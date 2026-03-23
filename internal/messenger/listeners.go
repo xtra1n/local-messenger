@@ -1,41 +1,45 @@
 package messenger
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/xtra1n/local-messenger/internal/domain"
+)
 
 type listenerMap struct {
 	mu   sync.RWMutex
-	data map[int]map[int]chan Message
+	data map[int]map[int]chan domain.Message
 }
 
 func newListenersMap() *listenerMap {
 	return &listenerMap{
-		data: make(map[int]map[int]chan Message),
+		data: make(map[int]map[int]chan domain.Message),
 	}
 }
 
-func (l *listenerMap) Get(chatID int, deviceID int) chan Message {
+func (l *listenerMap) Get(chatID int, deviceID int) chan domain.Message {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if _, ok := l.data[chatID]; !ok {
-		l.data[chatID] = make(map[int]chan Message)
+		l.data[chatID] = make(map[int]chan domain.Message)
 	}
 
 	if ch, ok := l.data[chatID][deviceID]; ok {
 		return ch
 	}
 
-	ch := make(chan Message, 100)
+	ch := make(chan domain.Message, 100)
 	l.data[chatID][deviceID] = ch
 
 	return ch
 }
 
-func (l *listenerMap) GetChatListeners(chatID int) map[int]chan Message {
+func (l *listenerMap) GetChatListeners(chatID int) map[int]chan domain.Message {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
-	listeners := make(map[int]chan Message)
+	listeners := make(map[int]chan domain.Message)
 	if devices, ok := l.data[chatID]; ok {
 		for id, ch := range devices {
 			listeners[id] = ch

@@ -7,20 +7,20 @@ import (
 	"time"
 
 	"github.com/xtra1n/local-messenger/internal/config"
-	"github.com/xtra1n/local-messenger/internal/messenger"
+	"github.com/xtra1n/local-messenger/internal/domain"
 	"github.com/xtra1n/local-messenger/pkg/logger"
 )
 
 type Server struct {
 	cfg       *config.Config
 	log       *logger.Logger
-	messenger messenger.Messenger
-	userStore messenger.UserStore
+	messenger domain.Messenger
+	userStore domain.UserStore
 	sessions  *sessionStore
 	srv       *http.Server
 }
 
-func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger, us messenger.UserStore) *Server {
+func New(cfg *config.Config, log *logger.Logger, m domain.Messenger, us domain.UserStore) *Server {
 	s := &Server{
 		cfg:       cfg,
 		log:       log,

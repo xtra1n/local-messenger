@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xtra1n/local-messenger/internal/messenger"
+	"github.com/xtra1n/local-messenger/internal/infrastructure/store"
 )
 
 func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +65,7 @@ func (s *Server) loginPageHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if !messenger.CheckPassword(password, user.PasswordHash) {
+		if !store.CheckPassword(password, user.PasswordHash) {
 			w.WriteHeader(http.StatusUnauthorized)
 			data.Error = "Неверное имя пользователя или пароль"
 			_ = tmpl.Execute(w, data)
