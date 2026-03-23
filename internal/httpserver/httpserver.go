@@ -12,28 +12,49 @@ import (
 )
 
 type Server struct {
-	cfg       *config.Config
-	log       *logger.Logger
-	messenger domain.Messenger
-	userStore domain.UserStore
-	sessions  *sessionStore
-	srv       *http.Server
+	cfg         *config.Config
+	log         *logger.Logger
+	messenger   domain.Messenger
+	userStore   domain.UserStore
+	sessions    *sessionStore
+	srv         *http.Server
+	rateLimiter *SimpleTokenBucket
 }
 
 func New(cfg *config.Config, log *logger.Logger, m domain.Messenger, us domain.UserStore) *Server {
 	s := &Server{
-		cfg:       cfg,
-		log:       log,
-		messenger: m,
-		userStore: us,
-		sessions:  newSessionStore(),
+		cfg:         cfg,
+		log:         log,
+		messenger:   m,
+		userStore:   us,
+		sessions:    newSessionStore(),
+		rateLimiter: NewSimpleTokenBucket(100, time.Minute),
 	}
 
 	mux := http.NewServeMux()
+
 	fileServer := http.FileServer(http.Dir("web"))
 	mux.Handle("/static/", http.StripPrefix("/static/", fileServer))
 
-	mux.Handle("/", s.authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	corsCfg := DefaultCORSConfig()
+	if cfg.Server.Port == "80" || cfg.Server.Port == "443" {
+		corsCfg.AllowOrigins = []string{"https://yourdomain.com"}
+	}
+	corsMiddleware := CORSMiddleware(corsCfg)
+
+	apiMux := http.NewServeMux()
+
+	apiMux.Handle("/message", RateLimitMiddleware(s.rateLimiter)(http.HandlerFunc(s.messageHandler)))
+	apiMux.Handle("/healthz", http.HandlerFunc(s.healthHandler))
+	apiMux.Handle("/metrics", http.HandlerFunc(s.metricsHandler))
+
+	apiMux.Handle("/ws", s.authMiddleware(http.HandlerFunc(s.wsHandler)))
+
+	apiMux.Handle("/debug/stream", RateLimitMiddleware(s.rateLimiter)(http.HandlerFunc(s.streamHandler)))
+
+	mux.Handle("/", corsMiddleware(apiMux))
+
+	mux.Handle("/main", s.authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie("session_token")
 		if err != nil || c.Value == "" {
 			http.Redirect(w, r, "/login", http.StatusFound)
@@ -54,23 +75,12 @@ func New(cfg *config.Config, log *logger.Logger, m domain.Messenger, us domain.U
 			return
 		}
 
-		data := struct {
-			Username string
-		}{
-			Username: sess.Username,
-		}
-
+		data := struct{ Username string }{Username: sess.Username}
 		_ = tmpl.Execute(w, data)
 	})))
 
-	mux.HandleFunc("/login", s.loginPageHandler)
-	mux.HandleFunc("/signup", s.signupPageHandler)
-
-	mux.HandleFunc("/healthz", s.healthHandler)
-	mux.HandleFunc("/message", s.messageHandler)
-	mux.HandleFunc("/metrics", s.metricsHandler)
-	mux.HandleFunc("/debug/stream", s.streamHandler)
-	mux.Handle("/ws", s.authMiddleware(http.HandlerFunc(s.wsHandler)))
+	mux.Handle("/login", corsMiddleware(http.HandlerFunc(s.loginPageHandler)))
+	mux.Handle("/signup", corsMiddleware(http.HandlerFunc(s.signupPageHandler)))
 
 	s.srv = &http.Server{
 		Addr:    ":" + cfg.Server.Port,

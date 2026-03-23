@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/xtra1n/local-messenger/internal/domain"
@@ -45,12 +46,24 @@ func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, _ = w.Write([]byte("method not allowed"))
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<10)
+
 	msg, err := m.decodeMessage(r)
 	if err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		if strings.Contains(err.Error(), "http: request body too large") {
+			http.Error(w, "message too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := validateMessage(&msg); err != nil {
+		http.Error(w, "validation error: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -64,9 +77,11 @@ func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if m.store != nil {
-		if err := m.store.SaveMessage(ctx, msg); err != nil {
-			m.log.Error("failed to save message to store: ", err)
-		}
+		go func() {
+			if err := m.store.SaveMessage(ctx, msg); err != nil {
+				m.log.Error("failed to save message to store", "chat", msg.Chat, "err", err)
+			}
+		}()
 	}
 
 	w.WriteHeader(http.StatusOK)
