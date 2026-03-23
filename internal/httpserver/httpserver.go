@@ -50,7 +50,7 @@ func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger, us messe
 		tmpl, err := template.ParseFiles("web/index.html")
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("template error"))
+			_, _ = w.Write([]byte("template error"))
 			return
 		}
 

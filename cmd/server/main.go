@@ -22,7 +22,9 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to open sqlite db: ", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	if err := initDB(db); err != nil {
 		log.Fatal("failed to init sqlite schema", err)

@@ -3,7 +3,6 @@ package messenger
 import (
 	"context"
 	"database/sql"
-	
 )
 
 type sqliteStore struct {
@@ -38,7 +37,9 @@ func (s *sqliteStore) GetRecentMessages(ctx context.Context, chatID int, limit i
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var msgs []Message
 	for rows.Next() {

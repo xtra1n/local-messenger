@@ -3,7 +3,6 @@ package messenger
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
 	"net/http"
 	"strconv"
 	"time"
@@ -15,12 +14,6 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
-}
-
-func fnv32(s string) int {
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(s))
-	return int(h.Sum32())
 }
 
 func (m *messenger) HandleWS(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +28,9 @@ func (m *messenger) HandleWS(w http.ResponseWriter, r *http.Request) {
 		m.log.Error("websocket upgrade error: ", err)
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	m.metrics.activeConnections.Add(1)
 	defer m.metrics.activeConnections.Add(-1)
@@ -44,11 +39,11 @@ func (m *messenger) HandleWS(w http.ResponseWriter, r *http.Request) {
 	ch := m.subscribe(chatID, deviceID, user)
 	defer m.unsubscribe(chatID, deviceID, user)
 
-	if err := m.sendHistory(conn, chatID, user); err != nil {
+	if err := m.sendHistory(r.Context(), conn, chatID, user); err != nil {
 		m.log.Error("failed to send history chat=", chatID, " user=", user, " err=", err)
 	}
 
-	go m.consumeClienMessages(conn, chatID, deviceID)
+	go m.consumeClientMessages(conn, chatID, deviceID)
 
 	m.streamFromChannel(r.Context(), conn, ch)
 }
@@ -58,7 +53,7 @@ func parseWSParams(r *http.Request) (int, string, error) {
 	user := r.URL.Query().Get("user")
 
 	if chatStr == "" || user == "" {
-		return 0, "", fmt.Errorf("chat and user query params requires")
+		return 0, "", fmt.Errorf("chat and user query params required")
 	}
 
 	chatID, err := strconv.Atoi(chatStr)
@@ -84,8 +79,8 @@ func (m *messenger) unsubscribe(chatID, deviceID int, user string) {
 	m.log.Info("websocket removed chat=", chatID, " user=", user)
 }
 
-func (m *messenger) sendHistory(conn *websocket.Conn, chatID int, user string) error {
-	history := m.getHistory(chatID)
+func (m *messenger) sendHistory(ctx context.Context, conn *websocket.Conn, chatID int, user string) error {
+	history := m.getHistory(ctx, chatID)
 
 	for _, msg := range history {
 		if err := conn.WriteJSON(msg); err != nil {
@@ -97,7 +92,7 @@ func (m *messenger) sendHistory(conn *websocket.Conn, chatID int, user string) e
 	return nil
 }
 
-func (m *messenger) consumeClienMessages(conn *websocket.Conn, chatID, deviceID int) {
+func (m *messenger) consumeClientMessages(conn *websocket.Conn, chatID, deviceID int) {
 	for {
 		if _, _, err := conn.ReadMessage(); err != nil {
 			m.log.Info("websocket read closed chat=", chatID, " device=", deviceID, " err=", err)

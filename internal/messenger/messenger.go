@@ -23,7 +23,7 @@ func New(log *logger.Logger, store MessageStore) Messenger {
 		input:     make(chan Message, 1000),
 		log:       log,
 		metrics:   &Metrics{},
-		listeners: newListnersMap(),
+		listeners: newListenersMap(),
 		store:     store,
 	}
 }
@@ -59,7 +59,7 @@ func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
 	if !m.enqueueMessage(msg) {
 		m.metrics.messagesDropped.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("system overloaded, try again later"))
+		_, _ = w.Write([]byte("system overloaded, try again later"))
 		return
 	}
 
@@ -70,19 +70,19 @@ func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("message sent"))
+	_, _ = w.Write([]byte("message sent"))
 }
 
 func (m *messenger) Subscribe(chatID int, deviceID int) <-chan Message {
 	return m.listeners.Get(chatID, deviceID)
 }
 
-func (m *messenger) getHistory(chatID int) []Message {
+func (m *messenger) getHistory(ctx context.Context, chatID int) []Message {
 	if m.store == nil {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	msgs, err := m.store.GetRecentMessages(ctx, chatID, 100)

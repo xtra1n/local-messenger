@@ -7,7 +7,7 @@ type listenerMap struct {
 	data map[int]map[int]chan Message
 }
 
-func newListnersMap() *listenerMap {
+func newListenersMap() *listenerMap {
 	return &listenerMap{
 		data: make(map[int]map[int]chan Message),
 	}

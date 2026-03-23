@@ -21,7 +21,7 @@ deps:
 	which golangci-lint || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 build:
-	go build -v -o $(BINARY_NAME) $(MAIN_GO)
+	go build -v -o $(BINARY_NAME) $(CMD_PATH)
 
 run: build
 	./$(BINARY_NAME)

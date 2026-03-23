@@ -1,8 +1,8 @@
 package httpserver
 
 import (
+	"crypto/rand"
 	"encoding/hex"
-	"math/rand"
 	"net/http"
 	"sync"
 	"time"

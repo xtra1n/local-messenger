@@ -1,0 +1,27 @@
+# Binaries
+/local-messenger
+*.exe
+*.so
+*.dylib
+
+# Test
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Database
+*.db
+*.db-journal
+data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Logs
+*.log
