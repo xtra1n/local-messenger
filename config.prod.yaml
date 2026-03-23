@@ -1,0 +1,13 @@
+server:
+  host: "0.0.0.0"
+  port: "8080"
+
+database:
+  path: "/var/lib/messenger/data.db"
+  max_open_conns: 50
+  max_idle_conns: 10
+
+log:
+  level: "info"
+  format: "json"
+  file_path: "/var/log/messenger/app.log"
