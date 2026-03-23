@@ -73,7 +73,7 @@ func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger, us messe
 	mux.Handle("/ws", s.authMiddleware(http.HandlerFunc(s.wsHandler)))
 
 	s.srv = &http.Server{
-		Addr:    ":" + cfg.HTTPPort,
+		Addr:    ":" + cfg.Server.Port,
 		Handler: mux,
 	}
 
@@ -81,7 +81,7 @@ func New(cfg *config.Config, log *logger.Logger, m messenger.Messenger, us messe
 }
 
 func (s *Server) Start() error {
-	s.log.Info("HTTP server starting on ", s.cfg.HTTPPort)
+	s.log.Info("HTTP server starting on ", s.cfg.Server.Port)
 	if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return err
 	}
