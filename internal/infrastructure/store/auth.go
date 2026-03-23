@@ -1,30 +1,19 @@
-package messenger
+package store
 
 import (
 	"context"
 	"database/sql"
 	"time"
 
+	"github.com/xtra1n/local-messenger/internal/domain"
 	"golang.org/x/crypto/bcrypt"
 )
-
-type User struct {
-	ID           int64
-	Username     string
-	PasswordHash string
-	CreatedAt    time.Time
-}
-
-type UserStore interface {
-	CreateUser(ctx context.Context, username, password string) error
-	GetUserByUsername(ctx context.Context, username string) (User, error)
-}
 
 type sqliteUserStore struct {
 	db *sql.DB
 }
 
-func NewSQLiteUserStore(db *sql.DB) UserStore {
+func NewSQLiteUserStore(db *sql.DB) domain.UserStore {
 	return &sqliteUserStore{db: db}
 }
 
@@ -56,8 +45,8 @@ func (s *sqliteUserStore) CreateUser(ctx context.Context, username, password str
 	return err
 }
 
-func (s *sqliteUserStore) GetUserByUsername(ctx context.Context, username string) (User, error) {
-	var u User
+func (s *sqliteUserStore) GetUserByUsername(ctx context.Context, username string) (domain.User, error) {
+	var u domain.User
 	err := s.db.QueryRowContext(ctx,
 		`SELECT id, username, password_hash, created_at
          FROM users

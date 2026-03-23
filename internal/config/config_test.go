@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestLoad_Deafults(t *testing.T) {
+func TestLoad_Defaults(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("MESSENGER_SERVER_PORT", "9090")
 	defer os.Clearenv()

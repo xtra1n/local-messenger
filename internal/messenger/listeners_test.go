@@ -2,6 +2,8 @@ package messenger
 
 import (
 	"testing"
+
+	"github.com/xtra1n/local-messenger/internal/domain"
 )
 
 func TestListenersMap_Get(t *testing.T) {
@@ -20,7 +22,7 @@ func TestListenersMap_Get(t *testing.T) {
 
 	// Проверка, что каналы рабочие
 	select {
-	case ch1 <- Message{Text: "test"}:
+	case ch1 <- domain.Message{Text: "test"}:
 	default:
 		t.Fatal("channel should not be full")
 	}

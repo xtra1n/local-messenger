@@ -1,6 +1,10 @@
 package messenger
 
-import "context"
+import (
+	"context"
+
+	"github.com/xtra1n/local-messenger/internal/domain"
+)
 
 func (m *messenger) distributor(ctx context.Context) {
 	m.log.Info("distributor worker started")
@@ -16,7 +20,7 @@ func (m *messenger) distributor(ctx context.Context) {
 	}
 }
 
-func (m *messenger) handleIncomingMessege(msg Message) {
+func (m *messenger) handleIncomingMessege(msg domain.Message) {
 	listeners := m.listeners.GetChatListeners(msg.Chat)
 	if len(listeners) == 0 {
 		m.log.Debug("no listeners for chat ", msg.Chat)
@@ -26,11 +30,11 @@ func (m *messenger) handleIncomingMessege(msg Message) {
 	m.dispatchToListners(msg, listeners)
 }
 
-func (m *messenger) dispatchToListners(msg Message, listeners map[int]chan Message) {
+func (m *messenger) dispatchToListners(msg domain.Message, listeners map[int]chan domain.Message) {
 	for deviceID, ch := range listeners {
 		select {
 		case ch <- msg:
-			m.metrics.messagesSampled.Add(1)
+			m.metrics.MessagesSampled.Add(1)
 		default:
 			m.log.Debug("listener channel full, chat=", msg.Chat, " device=", deviceID)
 		}

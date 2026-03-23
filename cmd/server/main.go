@@ -10,6 +10,7 @@ import (
 
 	"github.com/xtra1n/local-messenger/internal/config"
 	"github.com/xtra1n/local-messenger/internal/httpserver"
+	"github.com/xtra1n/local-messenger/internal/infrastructure/store"
 	"github.com/xtra1n/local-messenger/internal/messenger"
 	"github.com/xtra1n/local-messenger/pkg/logger"
 )
@@ -40,10 +41,10 @@ func main() {
 		log.Fatal("failed to init sqlite schema", err)
 	}
 
-	store := messenger.NewSQLiteStore(db)
-	userStore := messenger.NewSQLiteUserStore(db)
+	messageStore := store.NewSQLiteStore(db)
+	userStore := store.NewSQLiteUserStore(db)
 
-	m := messenger.New(log, store)
+	m := messenger.New(log, messageStore)
 	srv := httpserver.New(cfg, log, m, userStore)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -70,4 +71,31 @@ func main() {
 	}
 
 	log.Info("server stopped")
+}
+
+func initDB(db *sql.DB) error {
+	if _, err := db.Exec(`
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            by TEXT NOT NULL,
+            at DATETIME NOT NULL
+        );
+    `); err != nil {
+		return err
+	}
+
+	if _, err := db.Exec(`
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            created_at DATETIME NOT NULL
+        );
+    `); err != nil {
+		return err
+	}
+
+	return nil
 }

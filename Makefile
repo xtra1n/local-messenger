@@ -40,6 +40,15 @@ fmt:
 	go fmt ./...
 	goimports -local github.com/xtra1n/local-messenger -w .
 
+docker-build:
+	docker build -t local-messenger .
+
+docker-run:
+	docker run -p 8080:8080 -v $(PWD)/data:/app/data local-messenger
+
+db-migrate:
+	go run ./cmd/server/main.go migrate
+
 clean:
 	rm -f $(BINARY_NAME) coverage.out coverage.html
 	go clean -cache

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/xtra1n/local-messenger/internal/domain"
 )
 
 var upgrader = websocket.Upgrader{
@@ -32,8 +33,8 @@ func (m *messenger) HandleWS(w http.ResponseWriter, r *http.Request) {
 		_ = conn.Close()
 	}()
 
-	m.metrics.activeConnections.Add(1)
-	defer m.metrics.activeConnections.Add(-1)
+	m.metrics.ActiveConnections.Add(1)
+	defer m.metrics.ActiveConnections.Add(-1)
 
 	deviceID := int(time.Now().UnixNano())
 	ch := m.subscribe(chatID, deviceID, user)
@@ -68,7 +69,7 @@ func upgradeToWebSocket(w http.ResponseWriter, r *http.Request) (*websocket.Conn
 	return upgrader.Upgrade(w, r, nil)
 }
 
-func (m *messenger) subscribe(chatID, deviceID int, user string) <-chan Message {
+func (m *messenger) subscribe(chatID, deviceID int, user string) <-chan domain.Message {
 	ch := m.listeners.Get(chatID, deviceID)
 	m.log.Info("websocket connected chat=", chatID, " user=", user)
 	return ch
@@ -101,7 +102,7 @@ func (m *messenger) consumeClientMessages(conn *websocket.Conn, chatID, deviceID
 	}
 }
 
-func (m *messenger) streamFromChannel(ctx context.Context, conn *websocket.Conn, ch <-chan Message) {
+func (m *messenger) streamFromChannel(ctx context.Context, conn *websocket.Conn, ch <-chan domain.Message) {
 	for {
 		select {
 		case msg, ok := <-ch:

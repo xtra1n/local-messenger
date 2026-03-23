@@ -6,21 +6,21 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/xtra1n/local-messenger/internal/domain"
 	"github.com/xtra1n/local-messenger/pkg/logger"
 )
 
 type messenger struct {
-	input     chan Message
+	input     chan domain.Message
 	log       *logger.Logger
 	metrics   *Metrics
 	listeners *listenerMap
-
-	store MessageStore
+	store     domain.MessageStore
 }
 
-func New(log *logger.Logger, store MessageStore) Messenger {
+func New(log *logger.Logger, store domain.MessageStore) domain.Messenger {
 	return &messenger{
-		input:     make(chan Message, 1000),
+		input:     make(chan domain.Message, 1000),
 		log:       log,
 		metrics:   &Metrics{},
 		listeners: newListenersMap(),
@@ -57,7 +57,7 @@ func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
 	msg.At = time.Now()
 
 	if !m.enqueueMessage(msg) {
-		m.metrics.messagesDropped.Add(1)
+		m.metrics.MessagesDropped.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte("system overloaded, try again later"))
 		return
@@ -73,11 +73,11 @@ func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("message sent"))
 }
 
-func (m *messenger) Subscribe(chatID int, deviceID int) <-chan Message {
+func (m *messenger) Subscribe(chatID int, deviceID int) <-chan domain.Message {
 	return m.listeners.Get(chatID, deviceID)
 }
 
-func (m *messenger) getHistory(ctx context.Context, chatID int) []Message {
+func (m *messenger) getHistory(ctx context.Context, chatID int) []domain.Message {
 	if m.store == nil {
 		return nil
 	}
@@ -94,19 +94,19 @@ func (m *messenger) getHistory(ctx context.Context, chatID int) []Message {
 	return msgs
 }
 
-func (m *messenger) decodeMessage(r *http.Request) (Message, error) {
-	var msg Message
+func (m *messenger) decodeMessage(r *http.Request) (domain.Message, error) {
+	var msg domain.Message
 	if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
-		return Message{}, err
+		return domain.Message{}, err
 	}
 
 	return msg, nil
 }
 
-func (m *messenger) enqueueMessage(msg Message) bool {
+func (m *messenger) enqueueMessage(msg domain.Message) bool {
 	select {
 	case m.input <- msg:
-		m.metrics.messagesAccepted.Add(1)
+		m.metrics.MessagesAccepted.Add(1)
 		return true
 	case <-time.After(5 * time.Second):
 		return false
