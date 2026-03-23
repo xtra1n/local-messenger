@@ -42,8 +42,6 @@ func (m *messenger) Run(ctx context.Context) error {
 }
 
 func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		_, _ = w.Write([]byte("method not allowed"))
@@ -78,7 +76,10 @@ func (m *messenger) AddMessage(w http.ResponseWriter, r *http.Request) {
 
 	if m.store != nil {
 		go func() {
-			if err := m.store.SaveMessage(ctx, msg); err != nil {
+			saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			if err := m.store.SaveMessage(saveCtx, msg); err != nil {
 				m.log.Error("failed to save message to store", "chat", msg.Chat, "err", err)
 			}
 		}()

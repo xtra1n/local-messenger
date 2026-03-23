@@ -36,25 +36,10 @@ func New(cfg *config.Config, log *logger.Logger, m domain.Messenger, us domain.U
 	fileServer := http.FileServer(http.Dir("web"))
 	mux.Handle("/static/", http.StripPrefix("/static/", fileServer))
 
-	corsCfg := DefaultCORSConfig()
-	if cfg.Server.Port == "80" || cfg.Server.Port == "443" {
-		corsCfg.AllowOrigins = []string{"https://yourdomain.com"}
-	}
-	corsMiddleware := CORSMiddleware(corsCfg)
+	mux.HandleFunc("/login", s.loginPageHandler)
+	mux.HandleFunc("/signup", s.signupPageHandler)
 
-	apiMux := http.NewServeMux()
-
-	apiMux.Handle("/message", RateLimitMiddleware(s.rateLimiter)(http.HandlerFunc(s.messageHandler)))
-	apiMux.Handle("/healthz", http.HandlerFunc(s.healthHandler))
-	apiMux.Handle("/metrics", http.HandlerFunc(s.metricsHandler))
-
-	apiMux.Handle("/ws", s.authMiddleware(http.HandlerFunc(s.wsHandler)))
-
-	apiMux.Handle("/debug/stream", RateLimitMiddleware(s.rateLimiter)(http.HandlerFunc(s.streamHandler)))
-
-	mux.Handle("/", corsMiddleware(apiMux))
-
-	mux.Handle("/main", s.authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/", s.authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie("session_token")
 		if err != nil || c.Value == "" {
 			http.Redirect(w, r, "/login", http.StatusFound)
@@ -79,8 +64,18 @@ func New(cfg *config.Config, log *logger.Logger, m domain.Messenger, us domain.U
 		_ = tmpl.Execute(w, data)
 	})))
 
-	mux.Handle("/login", corsMiddleware(http.HandlerFunc(s.loginPageHandler)))
-	mux.Handle("/signup", corsMiddleware(http.HandlerFunc(s.signupPageHandler)))
+	corsCfg := DefaultCORSConfig()
+	if cfg.Server.Port == "80" || cfg.Server.Port == "443" {
+		corsCfg.AllowOrigins = []string{"https://yourdomain.com"}
+	}
+	corsMiddleware := CORSMiddleware(corsCfg)
+
+	mux.Handle("/message", corsMiddleware(RateLimitMiddleware(s.rateLimiter)(http.HandlerFunc(s.messageHandler))))
+	mux.Handle("/healthz", corsMiddleware(http.HandlerFunc(s.healthHandler)))
+	mux.Handle("/metrics", corsMiddleware(http.HandlerFunc(s.metricsHandler)))
+	mux.Handle("/debug/stream", corsMiddleware(RateLimitMiddleware(s.rateLimiter)(http.HandlerFunc(s.streamHandler))))
+
+	mux.Handle("/ws", corsMiddleware(s.authMiddleware(http.HandlerFunc(s.wsHandler))))
 
 	s.srv = &http.Server{
 		Addr:    ":" + cfg.Server.Port,
@@ -91,11 +86,11 @@ func New(cfg *config.Config, log *logger.Logger, m domain.Messenger, us domain.U
 }
 
 func (s *Server) Start() error {
-	s.log.Info("HTTP server starting on ", s.cfg.Server.Port)
+	// ✅ Исправлен лог: теперь с ключом "port"
+	s.log.Info("HTTP server starting", "port", s.cfg.Server.Port)
 	if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return err
 	}
-
 	return nil
 }
 
@@ -103,6 +98,5 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.log.Info("HTTP server shutting down...")
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-
 	return s.srv.Shutdown(ctx)
 }
