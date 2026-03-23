@@ -2,9 +2,11 @@ package messenger
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -95,12 +97,78 @@ func (m *messenger) sendHistory(ctx context.Context, conn *websocket.Conn, chatI
 }
 
 func (m *messenger) consumeClientMessages(conn *websocket.Conn, chatID, deviceID int) {
+	m.log.Info("websocket message consumer started", "chat", chatID, "device", deviceID)
+
 	for {
-		if _, _, err := conn.ReadMessage(); err != nil {
-			m.log.Info("websocket read closed chat=", chatID, " device=", deviceID, " err=", err)
+		_, rawMsg, err := conn.ReadMessage()
+		if err != nil {
+			if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+				m.log.Info("websocket client disconnected", "chat", chatID, "device", deviceID)
+			} else {
+				m.log.Error("websocket read error", "chat", chatID, "device", deviceID, "err", err)
+			}
 			return
 		}
+
+		var msg domain.Message
+		if err := json.Unmarshal(rawMsg, &msg); err != nil {
+			m.log.Warn("failed to decode message from client", "chat", chatID, "device", deviceID, "err", err)
+			continue
+		}
+
+		if err := validateMessage(&msg); err != nil {
+			m.log.Warn("invalid message from client", "chat", chatID, "device", deviceID, "err", err)
+			continue
+		}
+
+		msg.At = time.Now()
+		msg.Chat = chatID
+
+		if !m.enqueueMessage(msg) {
+			m.log.Error("failed to enqueue message, system overloaded", "chat", chatID, "device", deviceID)
+			errorMsg := domain.Message{
+				Text: "SYSTEM_OVERLOAD",
+				At:   time.Now(),
+				By:   "system",
+				Chat: chatID,
+			}
+			_ = conn.WriteJSON(errorMsg)
+			continue
+		}
+		m.log.Debug("message enqueued successfully", "chat", chatID, "device", deviceID, "text", truncate(msg.Text, 50))
 	}
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+func validateMessage(msg *domain.Message) error {
+	if msg.Text == "" {
+		return fmt.Errorf("message text is required")
+	}
+
+	if len(msg.Text) > 10000 {
+		return fmt.Errorf("message text too long (max 10000 characters)")
+	}
+
+	if len(msg.By) == 0 {
+		return fmt.Errorf("sender username is required")
+	}
+
+	if len(msg.By) > 256 {
+		return fmt.Errorf("username too long (max 256 characters)")
+	}
+
+	msg.Text = strings.TrimSpace(msg.Text)
+	if msg.Text == "" {
+		return fmt.Errorf("message text cannot be only whitespace")
+	}
+
+	return nil
 }
 
 func (m *messenger) streamFromChannel(ctx context.Context, conn *websocket.Conn, ch <-chan domain.Message) {
