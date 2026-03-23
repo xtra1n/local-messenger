@@ -15,10 +15,20 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
-	log := logger.New(cfg.LogLevel)
+	cfg, err := config.Load()
+	if err != nil {
+		panic(err)
+	}
 
-	db, err := sql.Open("sqlite3", cfg.DBPath)
+	log := logger.New(cfg.Log.Level, cfg.Log.Format, nil)
+
+	log.Info("starting local-messenger",
+		"host", cfg.Server.Host,
+		"port", cfg.Server.Port,
+		"db", cfg.Database.Path,
+	)
+
+	db, err := sql.Open("sqlite3", cfg.Database.Path)
 	if err != nil {
 		log.Fatal("failed to open sqlite db: ", err)
 	}
